@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E-Commerce Store</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, Segoe UI, Arial, sans-serif; background: #f8fafc; color: #0f172a; }
+  header { background: #0f172a; color: #fff; padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+  header h1 { margin: 0; font-size: 22px; }
+  header a { color: #93c5fd; font-size: 14px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+  .filters button { border: 1px solid #cbd5e1; background: #fff; padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+  .filters button.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 20px; }
+  .card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.1); display: flex; flex-direction: column; }
+  .card img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #e2e8f0; }
+  .body { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .cat { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+  .name { font-weight: 600; font-size: 17px; }
+  .desc { font-size: 14px; color: #475569; flex: 1; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .price { font-size: 18px; font-weight: 700; }
+  .stock { font-size: 12px; color: #16a34a; }
+  .stock.low { color: #d97706; } .stock.out { color: #dc2626; }
+  .buy { background: #2563eb; color: #fff; border: 0; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; margin-top: 8px; }
+  .buy:disabled { background: #94a3b8; cursor: not-allowed; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 12px 20px; border-radius: 8px; display: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>&#128722; My E-Commerce Store</h1>
+  <a href="/api/products" target="_blank">View JSON API</a>
+</header>
+<main>
+  <div class="filters" id="filters"></div>
+  <div class="grid" id="grid">Loading...</div>
+</main>
+<div id="toast"></div>
+
+<script>
+const money = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+let products = [];
+let activeCategory = 'All';
+
+async function load() {
+  const res = await fetch('/api/products');
+  products = await res.json();
+  renderFilters();
+  render();
+}
+
+function renderFilters() {
+  const cats = ['All', ...new Set(products.map(p => p.category).filter(Boolean))];
+  const box = document.getElementById('filters');
+  box.innerHTML = '';
+  cats.forEach(c => {
+    const b = document.createElement('button');
+    b.textContent = c;
+    if (c === activeCategory) b.className = 'active';
+    b.onclick = () => { activeCategory = c; renderFilters(); render(); };
+    box.appendChild(b);
+  });
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  const list = products.filter(p => activeCategory === 'All' || p.category === activeCategory);
+  grid.innerHTML = '';
+  list.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const stockText = p.stock === 0 ? 'Out of stock' : p.stock < 10 ? 'Only ' + p.stock + ' left' : p.stock + ' in stock';
+    const stockClass = p.stock === 0 ? 'out' : p.stock < 10 ? 'low' : '';
+    card.innerHTML =
+      '<img alt="" src="' + (p.imageUrl || '/images/placeholder.svg') + '" onerror="this.onerror=null;this.src=\'/images/placeholder.svg\'">' +
+      '<div class="body">' +
+        '<div class="cat"></div><div class="name"></div><div class="desc"></div>' +
+        '<div class="row"><span class="price"></span><span class="stock ' + stockClass + '">' + stockText + '</span></div>' +
+        '<button class="buy"' + (p.stock === 0 ? ' disabled' : '') + '>Buy 1</button>' +
+      '</div>';
+    card.querySelector('img').alt = p.name;
+    card.querySelector('.cat').textContent = p.category || '';
+    card.querySelector('.name').textContent = p.name;
+    card.querySelector('.desc').textContent = p.description || '';
+    card.querySelector('.price').textContent = money.format(p.price);
+    card.querySelector('.buy').onclick = () => buy(p);
+    grid.appendChild(card);
+  });
+}
+
+async function buy(p) {
+  const res = await fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customerId: 1, items: [{ productId: p.id, quantity: 1 }] })
+  });
+  const data = await res.json();
+  toast(res.ok ? 'Order #' + data.id + ' placed for ' + p.name + ' (' + money.format(data.total) + ')' : (data.message || 'Order failed'));
+  load();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+load();
+</script>
+</body>
+</html>
